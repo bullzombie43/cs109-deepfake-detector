@@ -1,0 +1,19 @@
+{
+  "experiment": "P3 KDE-NB features=['f5']",
+  "n_test": 40,
+  "accuracy": 0.625,
+  "precision": 0.631578947368421,
+  "recall": 0.6,
+  "f1": 0.6153846153846154,
+  "roc_auc": 0.645,
+  "confusion_matrix": [
+    [
+      13,
+      7
+    ],
+    [
+      8,
+      12
+    ]
+  ]
+}
