@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(chmod +x:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(bash:*)",
+      "Bash(printf \\\\n\\\\n:*)",
+      "Bash(ls:*)",
+      "Bash(du:*)",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:www.researchgate.net)",
+      "WebFetch(domain:dl.acm.org)",
+      "WebFetch(domain:openaccess.thecvf.com)",
+      "Bash(do:*)",
+      "Bash($python_cmd:*)"
+    ]
+  }
+}
