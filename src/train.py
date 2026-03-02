@@ -10,7 +10,7 @@ import os
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-FEATURES_CSV = os.path.join(os.path.dirname(__file__), '..', 'data', 'features.csv')
+FEATURES_CSV = os.path.join(os.path.dirname(__file__), '..', 'data', 'features_p5_tighter_crop.csv')
 PARAMS_JSON  = os.path.join(os.path.dirname(__file__), '..', 'models', 'params.json')
 TEST_SIZE    = 0.20
 RANDOM_STATE = 42

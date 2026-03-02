@@ -21,7 +21,7 @@ from sklearn.metrics import (
 from sklearn.neighbors import KernelDensity
 
 PARAMS_JSON   = os.path.join(os.path.dirname(__file__), '..', 'models', 'params.json')
-FEATURES_CSV  = os.path.join(os.path.dirname(__file__), '..', 'data', 'features.csv')
+FEATURES_CSV  = os.path.join(os.path.dirname(__file__), '..', 'data', 'features_p5_tighter_crop.csv')
 RESULTS_DIR   = os.path.join(os.path.dirname(__file__), '..', 'results')
 THRESHOLD     = 0.5
 
