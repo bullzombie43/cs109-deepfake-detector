@@ -1,1 +1,16 @@
+# Dataset videos (too large for git)
 data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Claude Code worktrees and local settings
+.worktrees/
+.claude/settings.local.json
+
+# macOS
+.DS_Store

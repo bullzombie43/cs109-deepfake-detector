@@ -14,7 +14,7 @@ Public API:
   aggregate_features(frame_features)      -> (f1, f2, f3) mean across frames
   process_all_videos(data_dir, out_csv)   -> writes features CSV
 
-Run directly to process all videos and write data/features.csv:
+Run directly to process all videos and write data/features_p5_tighter_crop.csv:
   python src/features.py
 """
 
@@ -271,7 +271,7 @@ def process_all_videos(data_dir: str, out_csv: str) -> None:
 
 if __name__ == "__main__":
     DATA_DIR = "data"
-    OUT_CSV  = "data/features.csv"
+    OUT_CSV  = "data/features_p5_tighter_crop.csv"
 
     process_all_videos(DATA_DIR, OUT_CSV)
 
@@ -282,7 +282,7 @@ if __name__ == "__main__":
         data = list(reader)
 
     if not data:
-        print("ERROR: features.csv is empty")
+        print("ERROR: features_p5_tighter_crop.csv is empty")
         sys.exit(1)
 
     for feat in ("f1", "f2", "f3", "f4", "f5"):
