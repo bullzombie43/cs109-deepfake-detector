@@ -80,6 +80,10 @@ Run a notebook for analysis:
 jupyter notebook notebooks/
 ```
 
+## Git & Commit Standards
+
+- Do **not** add `Co-Authored-By: Claude` or any Claude authorship to commit messages.
+
 ## Evaluation Targets
 
 - Primary: Accuracy, Precision, Recall, F1

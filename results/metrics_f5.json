@@ -1,20 +1,20 @@
 {
   "experiment": "KDE-NB features=['f5']",
-  "threshold": 0.5343765732739251,
-  "n_test": 40,
-  "accuracy": 0.65,
-  "precision": 0.875,
-  "recall": 0.35,
-  "f1": 0.5,
-  "roc_auc": 0.6825,
+  "threshold": 0.5134165270464252,
+  "n_test": 80,
+  "accuracy": 0.6875,
+  "precision": 0.7419354838709677,
+  "recall": 0.575,
+  "f1": 0.647887323943662,
+  "roc_auc": 0.6825000000000001,
   "confusion_matrix": [
     [
-      19,
-      1
+      32,
+      8
     ],
     [
-      13,
-      7
+      17,
+      23
     ]
   ]
 }
