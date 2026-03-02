@@ -50,7 +50,7 @@ def build_kdes(params: dict):
 
 
 def classify_one(raw: dict, params: dict, kdes: dict, features: tuple):
-    """KDE-NB classification for one video."""
+    """KDE-NB classification for one video. Returns (label, p_fake) at fixed 0.5 threshold."""
     log_tf = set(params["log_transform_features"])
     vals = {
         feat: float(np.log1p(raw[feat])) if feat in log_tf else raw[feat]
@@ -66,8 +66,14 @@ def classify_one(raw: dict, params: dict, kdes: dict, features: tuple):
         log_scores[cls] = log_score
 
     p_real, p_fake = softmax2(log_scores["0"], log_scores["1"])
-    label = 1 if p_fake >= THRESHOLD else 0
-    return label, p_fake
+    return p_fake
+
+
+def find_optimal_threshold(y_true, y_scores):
+    """Find P(fake) cutoff maximising Youden's J = TPR - FPR on training scores."""
+    fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+    j = tpr - fpr
+    return float(thresholds[np.argmax(j)])
 
 
 def load_params(path):
@@ -121,14 +127,14 @@ def plot_roc(y_true, y_scores, auc, out_path):
     print(f"Saved ROC curve       -> {out_path}")
 
 
-def plot_score_distribution(y_true, y_scores, out_path):
+def plot_score_distribution(y_true, y_scores, out_path, threshold=THRESHOLD):
     real_scores = [s for s, l in zip(y_scores, y_true) if l == 0]
     fake_scores = [s for s, l in zip(y_scores, y_true) if l == 1]
     fig, ax = plt.subplots(figsize=(6, 4))
     bins = np.linspace(0, 1, 25)
     ax.hist(real_scores, bins=bins, alpha=0.6, label='Real',     color='steelblue')
     ax.hist(fake_scores, bins=bins, alpha=0.6, label='Deepfake', color='tomato')
-    ax.axvline(THRESHOLD, color='black', linestyle='--', linewidth=0.9, label=f'Threshold={THRESHOLD}')
+    ax.axvline(threshold, color='black', linestyle='--', linewidth=0.9, label=f'Threshold={threshold:.3f}')
     ax.set(xlabel='P(Deepfake)', ylabel='Count', title='Score Distribution (KDE-NB)')
     ax.legend()
     plt.tight_layout()
@@ -141,12 +147,27 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
              features_subset=('f1', 'f2', 'f3', 'f4', 'f5')):
     params   = load_params(params_path)
     features = load_features(features_path)
-    test_ids = set(params["test_ids"])
+    test_ids  = set(params["test_ids"])
+    train_ids = set(params["train_ids"])
 
     print(f"Fitting KDEs on training data...")
     kdes = build_kdes(params)
 
-    y_true, y_pred, y_scores = [], [], []
+    # Score training set to find the optimal threshold
+    train_true, train_scores = [], []
+    for vid in sorted(train_ids):
+        if vid not in features:
+            continue
+        f1, f2, f3, f4, f5, true_label = features[vid]
+        raw = {'f1': f1, 'f2': f2, 'f3': f3, 'f4': f4, 'f5': f5}
+        train_scores.append(classify_one(raw, params, kdes, features_subset))
+        train_true.append(true_label)
+
+    threshold = find_optimal_threshold(train_true, train_scores)
+    print(f"Optimal threshold (Youden's J on train): {threshold:.3f}  (was 0.500)")
+
+    # Score test set, applying the optimised threshold
+    y_true, y_scores = [], []
     missing = []
 
     for vid in sorted(test_ids):
@@ -155,10 +176,10 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
             continue
         f1, f2, f3, f4, f5, true_label = features[vid]
         raw = {'f1': f1, 'f2': f2, 'f3': f3, 'f4': f4, 'f5': f5}
-        pred_label, p_fake = classify_one(raw, params, kdes, features_subset)
+        y_scores.append(classify_one(raw, params, kdes, features_subset))
         y_true.append(true_label)
-        y_pred.append(pred_label)
-        y_scores.append(p_fake)
+
+    y_pred = [1 if s >= threshold else 0 for s in y_scores]
 
     if missing:
         print(f"WARNING: {len(missing)} test videos not found in CSV: {missing}")
@@ -172,7 +193,8 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
     cm   = confusion_matrix(y_true, y_pred)
 
     print(f"\n{'='*40}")
-    print(f"  [P3 KDE-NB -- features: {features_subset}]")
+    print(f"  [KDE-NB -- features: {features_subset}]")
+    print(f"  Threshold: {threshold:.3f}  (optimised on train)")
     print(f"  Test set: {n} videos")
     print(f"  Accuracy:  {acc:.3f}  ({int(acc*n)}/{n} correct)")
     print(f"  Precision: {prec:.3f}")
@@ -186,10 +208,12 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
     tag = '_'.join(features_subset)
     plot_confusion_matrix(cm, os.path.join(results_dir, f'confusion_matrix_{tag}.png'))
     plot_roc(y_true, y_scores, auc, os.path.join(results_dir, f'roc_curve_{tag}.png'))
-    plot_score_distribution(y_true, y_scores, os.path.join(results_dir, f'score_distribution_{tag}.png'))
+    plot_score_distribution(y_true, y_scores, os.path.join(results_dir, f'score_distribution_{tag}.png'),
+                            threshold=threshold)
 
     metrics = {
-        "experiment": f"P3 KDE-NB features={list(features_subset)}",
+        "experiment": f"KDE-NB features={list(features_subset)}",
+        "threshold": threshold,
         "n_test": n, "accuracy": acc, "precision": prec,
         "recall": rec, "f1": f1s, "roc_auc": auc,
         "confusion_matrix": cm.tolist(),
