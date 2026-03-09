@@ -1,0 +1,20 @@
+{
+  "experiment": "Gaussian-MLE-NB features=['f5']",
+  "threshold": 0.4520424336131594,
+  "n_test": 80,
+  "accuracy": 0.5875,
+  "precision": 0.559322033898305,
+  "recall": 0.825,
+  "f1": 0.6666666666666666,
+  "roc_auc": 0.68,
+  "confusion_matrix": [
+    [
+      14,
+      26
+    ],
+    [
+      7,
+      33
+    ]
+  ]
+}
