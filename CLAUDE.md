@@ -84,6 +84,15 @@ jupyter notebook notebooks/
 
 - Do **not** add `Co-Authored-By: Claude` or any Claude authorship to commit messages.
 
+## Writeup Submodule
+
+The writeup lives in `writeup/` as a git submodule (remote: `https://github.com/bullzombie43/CS-109-Challenge-Writeup`).
+
+After making any changes to `writeup/main.tex` or other writeup files, always:
+1. Commit inside the submodule: `cd writeup && git add <files> && git commit -m "..."`
+2. Push the submodule: `git push origin main` (from inside `writeup/`)
+3. Update the parent repo's submodule pointer: `cd .. && git add writeup && git commit -m "Update writeup submodule" && git push origin master`
+
 ## Evaluation Targets
 
 - Primary: Accuracy, Precision, Recall, F1
