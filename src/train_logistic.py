@@ -13,10 +13,10 @@ Usage:
 """
 
 import json
+import math
 import os
 import sys
 import numpy as np
-from sklearn.linear_model import LogisticRegression
 
 FEATURES_CSV    = os.path.join(os.path.dirname(__file__), '..', 'data', 'features_p5_tighter_crop.csv')
 KDE_PARAMS_JSON = os.path.join(os.path.dirname(__file__), '..', 'models', 'params.json')
@@ -51,6 +51,29 @@ def build_X(rows_list, features):
         X.append(row)
     return np.array(X)
 
+def calc_sigmoid(theta, x):
+    return 1 / (1 + math.exp(-np.dot(theta, x)))
+
+
+def grad_descent(X_train, y_train, num_steps=1000, step_size=0.01):
+    n, num_features = X_train.shape
+    # Prepend bias column of 1s (equivalent to x0 = 1)
+    X = np.hstack([np.ones((n, 1)), X_train])
+    thetas = [0.0] * (num_features + 1)
+
+    for step in range(num_steps):
+        gradients = [0.0] * (num_features + 1)
+        for i in range(n):
+            features = X[i]
+            label = y_train[i]
+            for j in range(num_features + 1):
+                gradients[j] += features[j] * (label - calc_sigmoid(thetas, features))
+        for j in range(num_features + 1):
+            thetas[j] += step_size * gradients[j]
+
+    return thetas
+
+
 
 def train(features_path=FEATURES_CSV, kde_params_path=KDE_PARAMS_JSON,
           models_dir=MODELS_DIR, features_subset=('f1', 'f2', 'f3', 'f4', 'f5')):
@@ -73,18 +96,18 @@ def train(features_path=FEATURES_CSV, kde_params_path=KDE_PARAMS_JSON,
     fake_count = int((y_train == 1).sum())
     print(f"Train class counts — real: {real_count}, fake: {fake_count}")
 
-    clf = LogisticRegression(max_iter=1000, random_state=42)
-    clf.fit(X_train, y_train)
+    thetas = grad_descent(X_train, y_train, num_steps=1000, step_size=0.01)
     print(f"Fitted logistic regression on {len(X_train)} training samples")
 
     tag = '_'.join(features_subset)
     out_path = os.path.join(models_dir, f'params_logistic_{tag}.json')
     os.makedirs(models_dir, exist_ok=True)
 
+    # thetas[0] is the bias/intercept; thetas[1:] are feature coefficients
     output = {
         "features":               list(features_subset),
-        "coef":                   clf.coef_[0].tolist(),
-        "intercept":              float(clf.intercept_[0]),
+        "coef":                   thetas[1:],
+        "intercept":              thetas[0],
         "log_transform_features": list(LOG_TRANSFORM_FEATURES),
         "train_ids":              list(train_ids),
         "test_ids":               list(test_ids),
@@ -94,9 +117,9 @@ def train(features_path=FEATURES_CSV, kde_params_path=KDE_PARAMS_JSON,
     print(f"Saved logistic regression parameters to {out_path}")
 
     print(f"\n  Features: {list(features_subset)}")
-    for feat, coef in zip(features_subset, clf.coef_[0]):
+    for feat, coef in zip(features_subset, thetas[1:]):
         print(f"    {feat}: coef={coef:.4f}")
-    print(f"  Intercept: {clf.intercept_[0]:.4f}")
+    print(f"  Intercept: {thetas[0]:.4f}")
 
 
 if __name__ == '__main__':

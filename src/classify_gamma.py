@@ -1,17 +1,22 @@
 """
-classify.py — KDE Naive Bayes classifier (Proposal 3).
+classify_gamma.py — Gamma MLE Naive Bayes classifier.
 
-Loads per-class training vectors from params.json, fits KDE likelihoods
-(Gaussian kernel, Scott's bandwidth), and runs log-space NB.
-Supports feature subset via CLI args.
+Loads per-class alpha/beta from models/params_gamma.json, runs log-space
+Gamma NB, optimises threshold via Youden's J on the training set, and
+evaluates on the held-out test set.
+
+Usage:
+    python src/classify_gamma.py             # all 5 features
+    python src/classify_gamma.py f5          # single feature
+    python src/classify_gamma.py f1 f3 f5    # feature subset
 """
 
 import json
 import math
 import os
+import sys
 
 import matplotlib
-from scipy.special import logsumexp
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,12 +25,21 @@ from sklearn.metrics import (
     confusion_matrix, roc_auc_score, roc_curve,
 )
 
-PARAMS_JSON   = os.path.join(os.path.dirname(__file__), '..', 'models', 'params.json')
-FEATURES_CSV  = os.path.join(os.path.dirname(__file__), '..', 'data', 'features_p5_tighter_crop.csv')
-RESULTS_DIR   = os.path.join(os.path.dirname(__file__), '..', 'results')
-THRESHOLD     = 0.5
+PARAMS_JSON  = os.path.join(os.path.dirname(__file__), '..', 'models', 'params_gamma.json')
+FEATURES_CSV = os.path.join(os.path.dirname(__file__), '..', 'data', 'features_p5_tighter_crop.csv')
+RESULTS_DIR  = os.path.join(os.path.dirname(__file__), '..', 'results')
 
-LOG_TRANSFORM_FEATURES = {'f1', 'f2', 'f3', 'f5'}
+EPSILON = 1e-6
+
+
+def log_gamma(x: float, alpha: float, beta: float) -> float:
+    """Log-PDF of Gamma(alpha, beta) evaluated at x, where beta is the scale parameter.
+
+    PDF: x^(alpha-1) * exp(-x/beta) / (beta^alpha * Gamma(alpha))
+    log-PDF: (alpha-1)*log(x) - x/beta - alpha*log(beta) - lgamma(alpha)
+    """
+    x = max(x, EPSILON)   # guard against x <= 0
+    return (alpha - 1) * math.log(x) - x / beta - alpha * math.log(beta) - math.lgamma(alpha)
 
 
 def softmax2(a: float, b: float):
@@ -35,54 +49,27 @@ def softmax2(a: float, b: float):
     return ea / s, eb / s
 
 
-def build_kdes(params: dict):
-    """Pre-fit one KDE per class per feature from saved training vectors."""
-    kde_data = params["kde_training_data"]
-    kdes = {}
-    for cls in ("0", "1"):
-        kdes[cls] = {}
-        for feat, vals in kde_data[cls].items():
-            arr = np.array(vals).flatten()
-            kde = calc_scotts(arr)
-            kdes[cls][feat] = kde
-    return kdes
-
-
-def calc_scotts(data):
-    n = len(data)
-    std = np.std(data)
-    h = math.pow(n, -1/5) * std #Scott's bandwidth
-    return h,data
-
-
-def classify_one(raw: dict, params: dict, kdes: dict, features: tuple):
-    """KDE-NB classification for one video. Returns (label, p_fake) at fixed 0.5 threshold."""
-    log_tf = set(params["log_transform_features"])
+def classify_one(raw: dict, params: dict, features: tuple) -> float:
+    """Returns P(fake) for one video."""
+    cls0 = params["classes"]["0"]
     vals = {
-        feat: float(np.log1p(raw[feat])) if feat in log_tf else raw[feat]
+        feat: math.log1p(raw[feat]) + EPSILON if cls0[feat]['log_transform'] else raw[feat] + EPSILON
         for feat in raw
     }
 
     log_scores = {}
     for cls in ("0", "1"):
-        log_score = params["log_priors"][cls]
+        p = params["classes"][cls]
+        log_score = math.log(p["prior"])
         for feat in features:
-            x = vals[feat]
-            log_score += compute_log_density(kdes[cls][feat], x)
+            log_score += log_gamma(vals[feat], p[feat]["alpha"], p[feat]["beta"])
         log_scores[cls] = log_score
 
-    p_real, p_fake = softmax2(log_scores["0"], log_scores["1"])
+    _, p_fake = softmax2(log_scores["0"], log_scores["1"])
     return p_fake
 
-def compute_log_density(kde, x):
-    samples = kde[1]
-    h = kde[0]
-    terms = -0.5 * ((x - samples) / h) ** 2
-    log_density = logsumexp(terms) - math.log(len(samples) * h * math.sqrt(2 * math.pi))
-    return log_density
 
 def find_optimal_threshold(y_true, y_scores):
-    """Find P(fake) cutoff maximising Youden's J = TPR - FPR on training scores."""
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
     j = tpr - fpr
     return float(thresholds[np.argmax(j)])
@@ -114,7 +101,7 @@ def plot_confusion_matrix(cm, out_path):
     ax.set(xticks=[0, 1], yticks=[0, 1],
            xticklabels=classes, yticklabels=classes,
            xlabel='Predicted', ylabel='True',
-           title='Confusion Matrix (KDE-NB)')
+           title='Confusion Matrix (Gamma MLE-NB)')
     for i in range(2):
         for j in range(2):
             ax.text(j, i, str(cm[i, j]), ha='center', va='center',
@@ -131,7 +118,7 @@ def plot_roc(y_true, y_scores, auc, out_path):
     ax.plot(fpr, tpr, label=f'AUC = {auc:.3f}')
     ax.plot([0, 1], [0, 1], 'k--', linewidth=0.8)
     ax.set(xlabel='False Positive Rate', ylabel='True Positive Rate',
-           title='ROC Curve (KDE-NB)')
+           title='ROC Curve (Gamma MLE-NB)')
     ax.legend()
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
@@ -139,7 +126,7 @@ def plot_roc(y_true, y_scores, auc, out_path):
     print(f"Saved ROC curve       -> {out_path}")
 
 
-def plot_score_distribution(y_true, y_scores, out_path, threshold=THRESHOLD):
+def plot_score_distribution(y_true, y_scores, out_path, threshold):
     real_scores = [s for s, l in zip(y_scores, y_true) if l == 0]
     fake_scores = [s for s, l in zip(y_scores, y_true) if l == 1]
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -147,7 +134,7 @@ def plot_score_distribution(y_true, y_scores, out_path, threshold=THRESHOLD):
     ax.hist(real_scores, bins=bins, alpha=0.6, label='Real',     color='steelblue')
     ax.hist(fake_scores, bins=bins, alpha=0.6, label='Deepfake', color='tomato')
     ax.axvline(threshold, color='black', linestyle='--', linewidth=0.9, label=f'Threshold={threshold:.3f}')
-    ax.set(xlabel='P(Deepfake)', ylabel='Count', title='Score Distribution (KDE-NB)')
+    ax.set(xlabel='P(Deepfake)', ylabel='Count', title='Score Distribution (Gamma MLE-NB)')
     ax.legend()
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
@@ -159,36 +146,32 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
              features_subset=('f1', 'f2', 'f3', 'f4', 'f5')):
     params   = load_params(params_path)
     features = load_features(features_path)
-    test_ids  = set(params["test_ids"])
     train_ids = set(params["train_ids"])
+    test_ids  = set(params["test_ids"])
 
-    print(f"Fitting KDEs on training data...")
-    kdes = build_kdes(params)
-
-    # Score training set to find the optimal threshold
+    # Score training set to find optimal threshold
     train_true, train_scores = [], []
     for vid in sorted(train_ids):
         if vid not in features:
             continue
         f1, f2, f3, f4, f5, true_label = features[vid]
         raw = {'f1': f1, 'f2': f2, 'f3': f3, 'f4': f4, 'f5': f5}
-        train_scores.append(classify_one(raw, params, kdes, features_subset))
+        train_scores.append(classify_one(raw, params, features_subset))
         train_true.append(true_label)
 
     threshold = find_optimal_threshold(train_true, train_scores)
     print(f"Optimal threshold (Youden's J on train): {threshold:.3f}  (was 0.500)")
 
-    # Score test set, applying the optimised threshold
+    # Score test set
     y_true, y_scores = [], []
     missing = []
-
     for vid in sorted(test_ids):
         if vid not in features:
             missing.append(vid)
             continue
         f1, f2, f3, f4, f5, true_label = features[vid]
         raw = {'f1': f1, 'f2': f2, 'f3': f3, 'f4': f4, 'f5': f5}
-        y_scores.append(classify_one(raw, params, kdes, features_subset))
+        y_scores.append(classify_one(raw, params, features_subset))
         y_true.append(true_label)
 
     y_pred = [1 if s >= threshold else 0 for s in y_scores]
@@ -205,7 +188,7 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
     cm   = confusion_matrix(y_true, y_pred)
 
     print(f"\n{'='*40}")
-    print(f"  [KDE-NB -- features: {features_subset}]")
+    print(f"  [Gamma MLE-NB -- features: {features_subset}]")
     print(f"  Threshold: {threshold:.3f}  (optimised on train)")
     print(f"  Test set: {n} videos")
     print(f"  Accuracy:  {acc:.3f}  ({int(acc*n)}/{n} correct)")
@@ -217,14 +200,14 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
     print(f"Confusion matrix (rows=true, cols=predicted):\n{cm}")
 
     os.makedirs(results_dir, exist_ok=True)
-    tag = '_'.join(features_subset)
+    tag = 'gamma_' + '_'.join(features_subset)
     plot_confusion_matrix(cm, os.path.join(results_dir, f'confusion_matrix_{tag}.png'))
     plot_roc(y_true, y_scores, auc, os.path.join(results_dir, f'roc_curve_{tag}.png'))
     plot_score_distribution(y_true, y_scores, os.path.join(results_dir, f'score_distribution_{tag}.png'),
                             threshold=threshold)
 
     metrics = {
-        "experiment": f"KDE-NB features={list(features_subset)}",
+        "experiment": f"Gamma-MLE-NB features={list(features_subset)}",
         "threshold": threshold,
         "n_test": n, "accuracy": acc, "precision": prec,
         "recall": rec, "f1": f1s, "roc_auc": auc,
@@ -237,7 +220,6 @@ def evaluate(params_path=PARAMS_JSON, features_path=FEATURES_CSV, results_dir=RE
 
 
 if __name__ == '__main__':
-    import sys
     subset = tuple(sys.argv[1:]) if len(sys.argv) > 1 else ('f1', 'f2', 'f3', 'f4', 'f5')
     print(f"Features used: {subset}")
     evaluate(features_subset=subset)

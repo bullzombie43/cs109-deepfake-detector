@@ -21,7 +21,7 @@ LOG_TRANSFORM_FEATURES = {'f1', 'f2', 'f3', 'f5'}
 def load_features(path):
     rows = []
     with open(path) as f:
-        f.readline()
+        f.readline() #skip the labels
         for line in f:
             parts = line.strip().split(',')
             video_id = parts[0]
@@ -32,13 +32,14 @@ def load_features(path):
 
 
 def split_data(rows):
-    labels = [r[6] for r in rows]
+    labels = [r[6] for r in rows] #label of data: 1 deepfake or 0 real
     train_rows, test_rows = train_test_split(
         rows, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=labels
     )
     return train_rows, test_rows
 
 
+#this just extracts the features and saves the log_transformed values doens't actually calculate weights
 def train(features_path=FEATURES_CSV, params_path=PARAMS_JSON):
     rows = load_features(features_path)
     print(f"Loaded {len(rows)} videos from {features_path}")
@@ -47,7 +48,7 @@ def train(features_path=FEATURES_CSV, params_path=PARAMS_JSON):
     print(f"Train: {len(train_rows)} videos  |  Test: {len(test_rows)} videos")
 
     feat_names = ['f1', 'f2', 'f3', 'f4', 'f5']
-    idx_map    = {'f1': 1, 'f2': 2, 'f3': 3, 'f4': 4, 'f5': 5}
+    idx_map    = {'f1': 1, 'f2': 2, 'f3': 3, 'f4': 4, 'f5': 5} #idx 0 is the video id
 
     real_rows = [r for r in train_rows if r[6] == 0]
     fake_rows = [r for r in train_rows if r[6] == 1]
@@ -78,7 +79,7 @@ def train(features_path=FEATURES_CSV, params_path=PARAMS_JSON):
         "test_ids":  [r[0] for r in test_rows],
     }
 
-    os.makedirs(os.path.dirname(params_path), exist_ok=True)
+    os.makedirs(os.path.dirname(params_path), exist_ok=True) #cache/save everything in json file for wuick testing
     with open(params_path, 'w') as f:
         json.dump(output, f, indent=2)
     print(f"Saved KDE training data to {params_path}")
