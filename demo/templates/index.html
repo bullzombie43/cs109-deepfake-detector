@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deepfake Detection Challenge</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --card: #1a1a22;
+    --border: #2e2e3e;
+    --accent: #7c6df0;
+    --accent2: #f06d7c;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --text: #e8e8f0;
+    --muted: #6b6b88;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  header h1 span { color: var(--accent); }
+  header p {
+    color: var(--muted);
+    margin-top: 6px;
+    font-size: 0.95rem;
+  }
+
+  /* Scoreboard */
+  .scoreboard {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    width: 100%;
+    max-width: 640px;
+  }
+  .score-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    text-align: center;
+  }
+  .score-card .label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .score-card .streak {
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .score-card.human .streak  { color: var(--accent); }
+  .score-card.model .streak  { color: var(--accent2); }
+  .score-card .sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .btn-reset { background: #374151; color: #fff; border: none; border-radius: var(--radius); padding: 10px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
+  .round-badge {
+    flex: 0 0 auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    text-align: center;
+    min-width: 80px;
+  }
+  .round-badge .label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 4px; }
+  .round-badge .num   { font-size: 2.4rem; font-weight: 700; line-height: 1; color: var(--yellow); }
+
+  /* Video frame */
+  .frame-wrap {
+    width: 100%;
+    max-width: 640px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 20px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .frame-wrap img {
+    width: 100%;
+    display: block;
+    border-radius: 0;
+  }
+  .frame-placeholder {
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding: 60px 20px;
+    text-align: center;
+  }
+  .video-label {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.6);
+    color: var(--muted);
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 14px;
+    width: 100%;
+    max-width: 640px;
+    margin-bottom: 20px;
+  }
+  .btn {
+    flex: 1;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.2px;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .btn-real  { background: #2563eb; color: #fff; }
+  .btn-fake  { background: #dc2626; color: #fff; }
+  .btn-next  { background: var(--accent); color: #fff; flex: 1; display: none; }
+  .btn-start { background: var(--accent); color: #fff; width: 100%; max-width: 640px; padding: 16px; border: none; border-radius: var(--radius); font-size: 1.1rem; font-weight: 600; cursor: pointer; margin-bottom: 20px; letter-spacing: 0.3px; }
+
+  /* Result card */
+  .result-card {
+    width: 100%;
+    max-width: 640px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    display: none;
+    margin-bottom: 20px;
+  }
+  .result-card.visible { display: block; }
+  .result-title {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .result-rows {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+  .result-cell {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .result-cell .cell-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .result-cell .cell-val {
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .correct  { color: var(--green); }
+  .wrong    { color: var(--red); }
+  .truth    { color: var(--yellow); }
+  .prob-bar-wrap {
+    margin-top: 14px;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .prob-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; }
+  .prob-bar-bg {
+    background: #2a2a3a;
+    border-radius: 4px;
+    height: 10px;
+    overflow: hidden;
+  }
+  .prob-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+    background: linear-gradient(to right, #2563eb, #dc2626);
+  }
+  .prob-pct { font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
+
+  /* Queue exhausted banner */
+  .done-banner {
+    width: 100%;
+    max-width: 640px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    text-align: center;
+    display: none;
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .done-banner.visible { display: block; }
+
+  /* Instruction text */
+  .instructions {
+    width: 100%;
+    max-width: 640px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .instructions strong { color: var(--text); }
+
+  /* Loading spinner */
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 24px auto;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner.visible { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Deepfake <span>Challenge</span></h1>
+  <p>Can you out-detect a Naive Bayes classifier?</p>
+</header>
+
+<div class="instructions">
+  <strong>Rules:</strong> Each round you see a video frame. Guess <strong>Real</strong> or <strong>Deepfake</strong>.
+  The model guesses too. The game ends the moment <em>either</em> player gets one wrong.
+  Whoever stays correct longer wins. If you both miss the same one, it's a tie.
+</div>
+
+<div class="scoreboard">
+  <div class="score-card human">
+    <div class="label">You</div>
+    <div class="streak" id="human-score">0</div>
+    <div class="sub">correct</div>
+  </div>
+  <div class="round-badge">
+    <div class="label">Round</div>
+    <div class="num" id="round-num">—</div>
+  </div>
+  <div class="score-card model">
+    <div class="label">KDE-NB</div>
+    <div class="streak" id="model-score">0</div>
+    <div class="sub">correct</div>
+  </div>
+</div>
+
+<button class="btn-start" id="btn-start" onclick="startGame()">Start Game</button>
+<button class="btn-reset" id="btn-reset" style="display:none" onclick="resetGame()">Reset</button>
+
+<div class="frame-wrap" id="frame-wrap">
+  <div class="frame-placeholder">Press Start to begin</div>
+</div>
+
+<div class="spinner" id="spinner"></div>
+
+<div class="btn-row" id="btn-row">
+  <button class="btn btn-real" id="btn-real" disabled onclick="submitGuess(0)">Real</button>
+  <button class="btn btn-fake" id="btn-fake" disabled onclick="submitGuess(1)">Deepfake</button>
+  <button class="btn btn-next" id="btn-next" onclick="nextRound()">Next &rarr;</button>
+</div>
+
+<div class="result-card" id="result-card">
+  <div class="result-title">Round Result</div>
+  <div class="result-rows">
+    <div class="result-cell">
+      <div class="cell-label">Truth</div>
+      <div class="cell-val truth" id="res-truth">—</div>
+    </div>
+    <div class="result-cell">
+      <div class="cell-label">Your Guess</div>
+      <div class="cell-val" id="res-human">—</div>
+    </div>
+    <div class="result-cell">
+      <div class="cell-label">Model Guess</div>
+      <div class="cell-val" id="res-model">—</div>
+    </div>
+  </div>
+  <div class="prob-bar-wrap">
+    <div class="prob-label">Model confidence: P(Deepfake)</div>
+    <div class="prob-bar-bg">
+      <div class="prob-bar-fill" id="prob-fill" style="width:0%"></div>
+    </div>
+    <div class="prob-pct" id="prob-pct">—</div>
+  </div>
+</div>
+
+<div class="done-banner" id="done-banner">
+  All 400 videos watched! Hit Reset to go again.
+</div>
+
+<script>
+let currentVideoId = null;
+let gameActive = false;
+
+function setSpinner(on) {
+  document.getElementById('spinner').classList.toggle('visible', on);
+}
+
+function setButtons(guessEnabled) {
+  document.getElementById('btn-real').disabled = !guessEnabled;
+  document.getElementById('btn-fake').disabled = !guessEnabled;
+  document.getElementById('btn-next').style.display = 'none';
+}
+
+function labelStr(v) {
+  return v === 1 ? 'Deepfake' : 'Real';
+}
+
+async function startGame() {
+  document.getElementById('btn-start').style.display = 'none';
+  document.getElementById('btn-reset').style.display = 'inline-block';
+  document.getElementById('result-card').classList.remove('visible');
+  document.getElementById('done-banner').classList.remove('visible');
+  gameActive = true;
+  await nextRound();
+}
+
+async function nextRound() {
+  document.getElementById('result-card').classList.remove('visible');
+  document.getElementById('btn-next').style.display = 'none';
+  setSpinner(true);
+  document.getElementById('frame-wrap').innerHTML = '';
+
+  const resp = await fetch('/api/next');
+  const data = await resp.json();
+  setSpinner(false);
+
+  if (data.done) {
+    document.getElementById('done-banner').classList.add('visible');
+    gameActive = false;
+    return;
+  }
+
+  currentVideoId = data.video_id;
+  document.getElementById('round-num').innerText = data.round;
+  document.getElementById('human-score').innerText = data.human_score;
+  document.getElementById('model-score').innerText = data.model_score;
+
+  const wrap = document.getElementById('frame-wrap');
+  wrap.innerHTML = `<span class="video-label">ID: ${data.video_id}</span>`;
+  const img = document.createElement('img');
+  img.src = `/api/frame/${data.video_id}?t=${Date.now()}`;
+  img.alt = 'Video frame';
+  wrap.appendChild(img);
+
+  setButtons(true);
+}
+
+async function submitGuess(guess) {
+  if (!currentVideoId || !gameActive) return;
+  setButtons(false);
+  setSpinner(true);
+
+  const resp = await fetch(`/api/guess/${guess}`);
+  const data = await resp.json();
+  setSpinner(false);
+
+  document.getElementById('human-score').innerText = data.human_score;
+  document.getElementById('model-score').innerText = data.model_score;
+
+  const card = document.getElementById('result-card');
+  card.classList.add('visible');
+
+  document.getElementById('res-truth').innerText = labelStr(data.truth);
+
+  const humanEl = document.getElementById('res-human');
+  humanEl.innerText = labelStr(guess);
+  humanEl.className = 'cell-val ' + (data.human_correct ? 'correct' : 'wrong');
+
+  const modelEl = document.getElementById('res-model');
+  modelEl.innerText = labelStr(data.model_guess);
+  modelEl.className = 'cell-val ' + (data.model_correct ? 'correct' : 'wrong');
+
+  const pct = Math.round(data.p_fake * 100);
+  document.getElementById('prob-fill').style.width = pct + '%';
+  document.getElementById('prob-pct').innerText = pct + '% fake';
+
+  document.getElementById('btn-next').style.display = 'flex';
+}
+
+async function resetGame() {
+  document.getElementById('result-card').classList.remove('visible');
+  document.getElementById('done-banner').classList.remove('visible');
+  document.getElementById('human-score').innerText = '0';
+  document.getElementById('model-score').innerText = '0';
+  document.getElementById('round-num').innerText = '—';
+  document.getElementById('frame-wrap').innerHTML = '<div class="frame-placeholder">Loading...</div>';
+  gameActive = true;
+  // Re-initialise session on server
+  await fetch('/');
+  await nextRound();
+}
+</script>
+</body>
+</html>
